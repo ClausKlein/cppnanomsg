@@ -26,33 +26,40 @@
 #include <array>
 #include <cassert>
 #include <iostream>
+#include <string>
 #include <string_view>
 
-int main() {
-  constexpr std::string_view data("A\000BC\n");
-  std::array<char, 16> buf{};
+int main()
+{
+    using namespace std::string_literals;
 
-  nn::socket s1(AF_SP, NN_PAIR);
-  s1.bind("inproc://a");
+    const std::string data("A\000BC\n"s);
+    std::array<char, 16> buf{};
 
-  {
-    nn::socket s2(AF_SP, NN_PAIR);
-    s2.connect("inproc://a");
+    nn::socket s1(AF_SP, NN_PAIR);
+    s1.bind("inproc://a");
 
-    s2.send(data.data(), data.length(), 0);
+    {
+        nn::socket s2(AF_SP, NN_PAIR);
+        s2.connect("inproc://a");
 
-    int rc = s1.recv(buf.data(), buf.size(), 0);
+        s2.send(data.data(), data.length(), 0);
 
-    assert(rc == data.length());                       // NOLINT(hicpp-no-array-decay)
-    assert(data == std::string_view(buf.data(), rc));  // NOLINT(hicpp-no-array-decay)
+        size_t rc = s1.recv(buf.data(), buf.size(), 0);
 
-    try {
-      s2.send(data.data(), data.length(), 0);
-      s2.shutdown(0);
-    } catch (const std::exception& e) { std::cerr << e.what() << std::endl; }
-  }
+        assert(rc == 5);                                   // NOLINT(hicpp-no-array-decay)
+        assert(rc == data.length());                       // NOLINT(hicpp-no-array-decay)
+        assert(data == std::string_view(buf.data(), rc));  // NOLINT(hicpp-no-array-decay)
 
-  int rc = s1.recv(buf.data(), buf.size(), 0);  // FIXME: this waits forever! CK
+        try
+        {
+            s2.send(data.data(), data.length(), 0);
+            s2.shutdown(0);
+        }
+        catch (const std::exception& e) { std::cerr << e.what() << std::endl; }
+    }
 
-  return 0;
+    int rc = s1.recv(buf.data(), buf.size(), 0);  // FIXME: this waits forever! CK
+
+    return 0;
 }
