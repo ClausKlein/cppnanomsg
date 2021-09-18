@@ -20,23 +20,39 @@
     IN THE SOFTWARE.
 */
 
-#include "nn.hpp"
+#include <nanomsg/nn.hpp>
+#include <nanomsg/pair.h>  // NN_PAIR
 
-#include <nanomsg/pair.h>
-
+#include <array>
 #include <cassert>
+#include <iostream>
+#include <string_view>
 
-int main ()
-{
-    nn::socket s1 (AF_SP, NN_PAIR);
-    s1.bind ("inproc://a");
-    nn::socket s2 (AF_SP, NN_PAIR);
-    s2.connect ("inproc://a");
+int main() {
+  constexpr std::string_view data("A\000BC\n");
+  std::array<char, 16> buf{};
 
-    s2.send ("ABC", 3, 0);
-    char buf [3];
-    int rc = s1.recv (buf, sizeof (buf), 0);
-    assert (rc == 3);
+  nn::socket s1(AF_SP, NN_PAIR);
+  s1.bind("inproc://a");
 
-    return 0;
+  {
+    nn::socket s2(AF_SP, NN_PAIR);
+    s2.connect("inproc://a");
+
+    s2.send(data.data(), data.length(), 0);
+
+    int rc = s1.recv(buf.data(), buf.size(), 0);
+
+    assert(rc == data.length());                       // NOLINT(hicpp-no-array-decay)
+    assert(data == std::string_view(buf.data(), rc));  // NOLINT(hicpp-no-array-decay)
+
+    try {
+      s2.send(data.data(), data.length(), 0);
+      s2.shutdown(0);
+    } catch (const std::exception& e) { std::cerr << e.what() << std::endl; }
+  }
+
+  int rc = s1.recv(buf.data(), buf.size(), 0);  // FIXME: this waits forever! CK
+
+  return 0;
 }

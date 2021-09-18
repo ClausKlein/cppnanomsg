@@ -20,20 +20,52 @@
 #   IN THE SOFTWARE.
 #
 
-cmake_minimum_required (VERSION 2.8)
-project (cppnanomsg)
+cmake_minimum_required(VERSION 3.19...3.21)
 
-#  The test.
+project(cppnanomsg LANGUAGES CXX)
 
-enable_testing ()
-set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-add_executable (binding binding.cpp)
-target_link_libraries (binding nanomsg)
-add_test (test ${CMAKE_BINARY_DIR}/binding)
+# config setting:
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-#  There's only a single header file to install.
+#
+# TODO: use modern cmake and do not set global cmake variables! CK
+#
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Werror)
+endif()
 
-install (FILES nn.hpp DESTINATION include/nanomsg)
+# ---- dependency ----
+#
+set(nanomsg_DIR /usr/local/lib/cmake/nanomsg-1.1.5)
+find_package(nanomsg 1.1.5 REQUIRED)
+add_library(nanomsg::nanomsg ALIAS nanomsg) # FIXME: add missing namespaced alias! CK
 
+# ---- Create header only library ----
 
+add_library(${PROJECT_NAME} INTERFACE include/nanomsg/nn.hpp)
+target_link_libraries(${PROJECT_NAME} INTERFACE nanomsg::nanomsg)
+set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD ${CMAKE_CXX_STANDARD})
+target_include_directories(
+  ${PROJECT_NAME} BEFORE INTERFACE $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>
+)
+# being a cross-platform target, we enforce standards conformance on MSVC
+target_compile_options(${PROJECT_NAME} INTERFACE "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/permissive->")
 
+add_library(nanomsg::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
+
+# ---- The test ----
+
+enable_testing()
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+add_executable(binding binding.cpp)
+target_link_libraries(binding nanomsg::${PROJECT_NAME})
+
+add_test(NAME test COMMAND binding)
+
+# There's only a single header file to install.
+# TODO: export cmake config package setting too! CK
+
+install(FILES include/nanomsg/nn.hpp DESTINATION include/nanomsg)
